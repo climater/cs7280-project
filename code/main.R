@@ -1,5 +1,7 @@
 library("plyr")
 library("bestglm")
+library("glmnet")
+library("MASS")
 setwd("~/repos/cs7280-project/data/")
 
 min.year<- 1951
@@ -37,17 +39,35 @@ data.fall[,-1] <- scale(data.fall[,-1])
 hurdata <- read.csv("hurdat.csv")
 colnames(hurdata) <- replace(colnames(hurdata), list=c(1), values=c("year"))
 
+## Histogram of Named Storms
 hist(hurdata$RevisedNamedStorms, breaks=10)
+
+## Pair wise plot of features
 pairs(data.summer)
 
-
-subset(hurdata, )
-hurdata[subset]
+## Create X and y to model on
 namedstorms <- hurdata[(hurdata$year >= min.year) & (hurdata$year <= max.year),"RevisedNamedStorms"]
+X <- as.matrix(data.summer[,-1])
+y <- namedstorms
 
-data.train <- cbind(data.summer[,-1], namedstorms)
+## Poisson using Lasso
+fit.summer.poisson.lasso <- cv.glmnet(X, y, family="poisson")
+bestlambda <- fit.summer.poisson.lasso$lambda.min
+betas <- fit.summer.poisson.lasso$glmnet.fit$beta[,fit.summer.poisson.lasso$glmnet.fit$lambda == bestlambda]
+fit.summer.poisson <- glm(y~X[,betas != 0] , family="poisson")
+yhat <- predict(fit.summer.poisson, as.data.frame(X[,betas != 0]), type="link")
 
+## Plot residuals against prediction
+plot(residuals(fit.summer.poisson, X, type="pearson") ~ yhat)
 
+## Plot mean and variance to check for overdispersion
+### Looks to be some over dispersion
+lambda <- predict(fit.summer.poisson, type="response")
+plot(log(lambda), log((y -lambda)^2),
+     xlab=expression(hat(lambda)),
+     ylab=expression((y - hat(lambda))^2))
+abline(0,1)
 
-
-window()
+## Negative Binomial Using the Same Variables from Poisson Lasso  
+fit.negbinomial <- glm.nb(y~X[,betas != 0])
+summary(fit.negbinomial)
