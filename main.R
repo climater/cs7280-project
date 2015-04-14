@@ -64,6 +64,13 @@ plot(resid(glm.subset, type="pearson") ~ predict(glm.subset, type="link"),
      xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Pearson residuals")
 abline(h=0)
 
+scatter.smooth(df$tna.data, df$hur.count)
+scatter.smooth(df$nina3.data, df$hur.count)
+lambda = predict(glm.subset, type="response")
+z = predict(glm.subset) + (df$hur.count-lambda)/lambda
+scatter.smooth(df$tna.data, z, ylab="Linearized response")
+scatter.smooth(df$nina3.data, z, ylab="Linearized response")
+
 ## Poisson regression with lasso variable selection
 # x = model.matrix(hur.count ~ ., data=df)[, -1]
 # y = df$hur.count
