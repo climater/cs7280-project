@@ -22,7 +22,7 @@ for (f in list.files(path="data", pattern="*.data")) {
 ## Load hurricane count data as the dependent variable
 hurdat = read.csv("data/hurdat.csv", row.names=1)
 hur.count = hurdat[as.character(min.year:max.year), "RevisedHurricanes"]
-# hist(hur.count)
+hist(hur.count, breaks=10, main="Histogram of Hurricane Counts per Year", xlab = "Hurricanes")
 
 ## Poisson regression with best subset stepwise selection
 df = cbind(hur.count, clim.jun2nov)
@@ -35,14 +35,26 @@ summary(glm.subset)
 ## Check over/under-dispersion
 summary(glm(formula(glm.subset), data=df, family=quasipoisson))
 
+## Check for outliers on the subset model
+par(mfrow=c(2,2))
+for (i in 1:4)
+  plot(glm.subset, which=i)
+
 ## Goodness of fit test (between the fitted model and saturated model)
+### Residual Deviance
 p.value = pchisq(glm.subset$deviance, glm.subset$df.residual, lower.tail=FALSE)
-print(paste("Goodness of fit test, p-value =", p.value)) # Large p-value indicates good fit.
+print(paste("Goodness of fit test (Residual Deviance), p-value =", p.value)) # Large p-value indicates good fit.
+
+### Pearson test
+p.value <- pchisq(sum(residuals(glm.subset, type="pearson")^2 ),
+                  glm.subset$df.residual, lower.tail=FALSE)
+print(paste("Goodness of fit test (Pearson), p-value =", p.value)) # Large p-value indicates good fit.
 
 ## Likelihood ratio test (between the fitted model and null model)
 p.value = pchisq(glm.subset$null.deviance-glm.subset$deviance,
                  glm.subset$df.null-glm.subset$df.residual, lower.tail=FALSE)
 print(paste("Likelihood ratio test, p-value =", p.value)) # Small p-value indicates not all betas are zero.
+
 
 ## Different residuals
 # resid(glm.subset, type="response") # Response residuals (of limited use)
@@ -64,6 +76,7 @@ plot(resid(glm.subset, type="pearson") ~ predict(glm.subset, type="link"),
      xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Pearson residuals")
 abline(h=0)
 
+## Smooth Scatter Plots
 scatter.smooth(df$tna.data, df$hur.count)
 scatter.smooth(df$nina3.data, df$hur.count)
 lambda = predict(glm.subset, type="response")
