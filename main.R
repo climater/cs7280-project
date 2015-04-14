@@ -1,87 +1,96 @@
-library("plyr")
-# library("bestglm")
 library("glmnet")
 library("MASS")
-# setwd("~/repos/cs7280-project/data/")
+# rm(list=ls())
 
-min.year<- 1951
-max.year <- 2012
-data.hurseason <- data.frame(year=1951:2012)
-data.summer <- data.hurseason
-data.fall <- data.hurseason
-data.spring <- data.hurseason
+min.year = 1951
+max.year = 2013
 
-for(f in list.files(path="data", pattern = "*.data")){
-    data <- read.table(file.path("data", f), skip = 1, nrows = 66)
+clim.jun2nov = data.frame(row.names=as.character(min.year:max.year))
+# clim.mar2may = data.frame(row.names=as.character(min.year:max.year))
+# clim.jun2aug = data.frame(row.names=as.character(min.year:max.year))
 
-    tmp <- data.frame(year=data$V1)
-    tmp[f] <- rowMeans(data[,c("V7", "V8", "V9", "V10", "V11", "V12")])
-    data.hurseason <- join(data.hurseason, tmp, by="year")
-
-    tmp <- data.frame(year=data$V1)
-    tmp[f] <- rowMeans(data[,c("V4", "V5", "V6")])
-    data.spring <- join(data.spring, tmp, by="year")
-
-    tmp <- data.frame(year=data$V1)
-    tmp[f] <- rowMeans(data[,c("V7", "V8", "V9")])
-    data.summer <- join(data.summer, tmp, by="year")
-
-    tmp <- data.frame(year=data$V1)
-    tmp[f] <- rowMeans(data[,c("V10", "V11", "V12")])
-    data.fall <- join(data.fall, tmp, by="year")
-
+## Load climate index data as predictors
+for (f in list.files(path="data", pattern="*.data")) {
+  #   print(f)
+  clim = read.table(file.path("data", f), skip=1, row.names=1, nrows=66)
+  colnames(clim) = month.abb
+  clim.jun2nov[, f] = scale(rowMeans(clim[as.character(min.year:max.year), 6:11]))
+#   clim.mar2may[, f] = scale(rowMeans(clim[as.character(min.year:max.year), 3:5]))
+#   clim.jun2aug[, f] = scale(rowMeans(clim[as.character(min.year:max.year), 6:8]))
 }
 
-colnames(data.spring) <-
-  lapply(colnames(data.spring), FUN=function(x) {gsub(pattern="data", replacement="spring",x=x)})
-colnames(data.summer) <-
-  lapply(colnames(data.summer), FUN=function(x) {gsub(pattern="data", replacement="summer",x=x)})
-colnames(data.fall) <-
-  lapply(colnames(data.fall), FUN=function(x) {gsub(pattern="data", replacement="fall",x=x)})
+## Load hurricane count data as the dependent variable
+hurdat = read.csv("data/hurdat.csv", row.names=1)
+hur.count = hurdat[as.character(min.year:max.year), "RevisedHurricanes"]
+par(mfrow=c(1, 1))
+hist(hur.count, breaks=10, main="Histogram of Hurricane Counts per Year", xlab = "Hurricanes")
 
-data.hurseason[,-1] <- scale(data.hurseason[,-1])
-data.spring[,-1] <- scale(data.spring[,-1])
-data.summer[,-1] <- scale(data.summer[,-1])
-data.fall[,-1] <- scale(data.fall[,-1])
-
-hurdata <- read.csv("data/hurdat.csv")
-colnames(hurdata) <- replace(colnames(hurdata), list=c(1), values=c("year"))
-
-## Histogram of Named Storms
-hist(hurdata$RevisedNamedStorms, breaks=0:30)
-
-## Pair wise plot of features
-# pairs(data.summer)
-
-## Create X and y to model on
-namedstorms <- hurdata[(hurdata$year >= min.year) & (hurdata$year <= max.year),"RevisedNamedStorms"]
-X <- as.matrix(data.summer[,-1])
-y <- namedstorms
-
-## Poisson regression
-df = data.summer[, -1]
-df$y = y
-glm.full = glm(y ~ ., data=df, family=poisson)
+## Poisson regression with best subset stepwise selection
+df = cbind(hur.count, clim.jun2nov)
+glm.full = glm(hur.count ~ ., data=df, family=poisson)
+summary(glm.full)
 glm.subset = step(glm.full, direction="both")
+summary(glm.subset)
+# anova(glm.full, glm.subset)
 
-## Poisson using Lasso
-fit.summer.poisson.lasso <- cv.glmnet(X, y, family="poisson")
-bestlambda <- fit.summer.poisson.lasso$lambda.min
-betas <- fit.summer.poisson.lasso$glmnet.fit$beta[,fit.summer.poisson.lasso$glmnet.fit$lambda == bestlambda]
-fit.summer.poisson <- glm(y~X[,betas != 0] , family="poisson")
-yhat <- predict(fit.summer.poisson, as.data.frame(X[,betas != 0]), type="link")
+## Check over/under-dispersion
+summary(glm(formula(glm.subset), data=df, family=quasipoisson))
 
-## Plot residuals against prediction
-plot(residuals(fit.summer.poisson, X, type="pearson") ~ yhat)
+## Check for outliers on the subset model
+par(mfrow=c(2,2))
+for (i in 1:4)
+  plot(glm.subset, which=i)
 
-## Plot mean and variance to check for overdispersion
-### Looks to be some over dispersion
-lambda <- predict(fit.summer.poisson, type="response")
-plot(log(lambda), log((y -lambda)^2),
-     xlab=expression(hat(lambda)),
-     ylab=expression((y - hat(lambda))^2))
-abline(0,1)
+## Goodness of fit test (between the fitted model and saturated model)
+### Residual Deviance
+p.value = pchisq(glm.subset$deviance, glm.subset$df.residual, lower.tail=FALSE)
+print(paste("Goodness of fit test (Residual Deviance): p-value =", p.value)) # Large p-value indicates good fit.
 
-## Negative Binomial Using the Same Variables from Poisson Lasso
-fit.negbinomial <- glm.nb(y~X[,betas != 0])
-summary(fit.negbinomial)
+### Pearson test
+p.value <- pchisq(sum(residuals(glm.subset, type="pearson")^2 ),
+                  glm.subset$df.residual, lower.tail=FALSE)
+print(paste("Goodness of fit test (Pearson): p-value =", p.value)) # Large p-value indicates good fit.
+
+## Likelihood ratio test (between the fitted model and null model)
+p.value = pchisq(glm.subset$null.deviance-glm.subset$deviance,
+                 glm.subset$df.null-glm.subset$df.residual, lower.tail=FALSE)
+print(paste("Likelihood ratio test: p-value =", p.value)) # Small p-value indicates not all betas are zero.
+
+# glm.subset = glm(hur.count ~ tna.data + poly(nina3.data, degree=2, raw=TRUE), data=df, family=poisson)
+
+## Different residuals
+# resid(glm.subset, type="response") # Response residuals (of limited use)
+# resid(glm.subset, type="pearson") # Pearson residuals
+# resid(glm.subset) # Deviance residuals
+
+## Residual plots
+par(mfrow=c(2, 2))
+plot(resid(glm.subset, type="response") ~ predict(glm.subset, type="response"),
+     xlab=expression(hat(lambda)), ylab="Response residuals")
+abline(h=0)
+plot(resid(glm.subset, type="response") ~ predict(glm.subset, type="link"),
+     xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Response residuals")
+abline(h=0)
+plot(resid(glm.subset) ~ predict(glm.subset, type="link"),
+     xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Deviance residuals")
+abline(h=0)
+plot(resid(glm.subset, type="pearson") ~ predict(glm.subset, type="link"),
+     xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Pearson residuals")
+abline(h=0)
+
+## Smooth Scatter Plots
+scatter.smooth(df$tna.data, df$hur.count)
+scatter.smooth(df$nina3.data, df$hur.count)
+lambda = predict(glm.subset, type="response")
+z = predict(glm.subset) + (df$hur.count-lambda)/lambda
+scatter.smooth(df$tna.data, z, ylab="Linearized response")
+scatter.smooth(df$nina3.data, z, ylab="Linearized response")
+
+
+## Poisson regression with lasso variable selection
+# x = model.matrix(hur.count ~ ., data=df)[, -1]
+# y = df$hur.count
+# cv.out = cv.glmnet(x, y, family="poisson", nfolds=5)
+# bestlam = cv.out$lambda.min
+# fit.lasso = glmnet(x, y, family="poisson", alpha=1, lambda=bestlam)
+# glm.lasso = glm(y ~ x[, as.vector(fit.lasso$beta!=0)], family=poisson)
