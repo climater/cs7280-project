@@ -1,4 +1,3 @@
-library("glmnet")
 library("MASS")
 # rm(list=ls())
 
@@ -14,18 +13,27 @@ for (f in list.files(path="data", pattern="*.data")) {
   #   print(f)
   clim = read.table(file.path("data", f), skip=1, row.names=1, nrows=66)
   colnames(clim) = month.abb
-  clim.jun2nov[, f] = scale(rowMeans(clim[as.character(min.year:max.year), 6:11]))
-#   clim.mar2may[, f] = scale(rowMeans(clim[as.character(min.year:max.year), 3:5]))
-#   clim.jun2aug[, f] = scale(rowMeans(clim[as.character(min.year:max.year), 6:8]))
+  cname = sub(".data", "", f)
+  clim.jun2nov[, cname] = scale(rowMeans(clim[as.character(min.year:max.year), 6:11]))
+#   clim.mar2may[, cname] = scale(rowMeans(clim[as.character(min.year:max.year), 3:5]))
+#   clim.jun2aug[, cname] = scale(rowMeans(clim[as.character(min.year:max.year), 6:8]))
 }
 
 ## Load hurricane count data as the dependent variable
 hurdat = read.csv("data/hurdat.csv", row.names=1)
 hur.count = hurdat[as.character(min.year:max.year), "RevisedHurricanes"]
 par(mfrow=c(1, 1))
-hist(hur.count, breaks=10, main="Histogram of Hurricane Counts per Year", xlab = "Hurricanes")
+hist(hur.count, breaks=seq(1.5, 15.5), main="Histogram of Hurricane Counts per Year",
+     xlab = "Annual Hurricane Count")
 
-## Poisson regression with best subset stepwise selection
+## Check the distribution of the count data
+# library(vcd)
+# fit = goodfit(df$hur.count, type="poisson")
+# summary(fit)
+# rootogram(fit)
+# distplot(hur.count, type="poisson")
+
+## Poisson regression with best subset stepwise variable selection
 df = cbind(hur.count, clim.jun2nov)
 glm.full = glm(hur.count ~ ., data=df, family=poisson)
 summary(glm.full)
@@ -56,12 +64,7 @@ p.value = pchisq(glm.subset$null.deviance-glm.subset$deviance,
                  glm.subset$df.null-glm.subset$df.residual, lower.tail=FALSE)
 print(paste("Likelihood ratio test: p-value =", p.value)) # Small p-value indicates not all betas are zero.
 
-# glm.subset = glm(hur.count ~ tna.data + poly(nina3.data, degree=2, raw=TRUE), data=df, family=poisson)
-
-## Different residuals
-# resid(glm.subset, type="response") # Response residuals (of limited use)
-# resid(glm.subset, type="pearson") # Pearson residuals
-# resid(glm.subset) # Deviance residuals
+# glm.subset = glm(hur.count ~ tna + poly(nina3, degree=2, raw=TRUE), data=df, family=poisson)
 
 ## Residual plots
 par(mfrow=c(2, 2))
@@ -79,15 +82,16 @@ plot(resid(glm.subset, type="pearson") ~ predict(glm.subset, type="link"),
 abline(h=0)
 
 ## Smooth Scatter Plots
-scatter.smooth(df$tna.data, df$hur.count)
-scatter.smooth(df$nina3.data, df$hur.count)
+scatter.smooth(df$tna, df$hur.count)
+scatter.smooth(df$nina3, df$hur.count)
 lambda = predict(glm.subset, type="response")
 z = predict(glm.subset) + (df$hur.count-lambda)/lambda
-scatter.smooth(df$tna.data, z, ylab="Linearized response")
-scatter.smooth(df$nina3.data, z, ylab="Linearized response")
-
+scatter.smooth(df$tna, z, ylab="Linearized response")
+scatter.smooth(df$nina3, z, ylab="Linearized response")
+# scatter.smooth(predict(glm.subset), z, ylab="Linearized response")
 
 ## Poisson regression with lasso variable selection
+# library("glmnet")
 # x = model.matrix(hur.count ~ ., data=df)[, -1]
 # y = df$hur.count
 # cv.out = cv.glmnet(x, y, family="poisson", nfolds=5)
