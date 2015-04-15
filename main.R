@@ -33,66 +33,66 @@ hur.count = hurdat[as.character(min.year:max.year), "RevisedHurricanes"]
 # rootogram(fit)
 # distplot(hur.count, type="poisson")
 
-## Poisson regression with best subset stepwise variable selection
+## Poisson regression and stepwise variable selection
 df = cbind(hur.count, clim.jun2nov)
 glm.full = glm(hur.count ~ ., data=df, family=poisson)
 summary(glm.full)
-glm.subset = step(glm.full, direction="both")
-summary(glm.subset)
-# anova(glm.full, glm.subset)
+glm.stepwise = step(glm.full, direction="both") #, k=log(length(hur.count)))
+summary(glm.stepwise)
+# anova(glm.full, glm.stepwise)
 
 ## Check over/under-dispersion
-summary(glm(formula(glm.subset), data=df, family=quasipoisson))
+summary(glm(formula(glm.stepwise), data=df, family=quasipoisson))
 
-## Check for outliers on the subset model
+## Check for outliers on the stepwise-selected model
 par(mfrow=c(2,2))
 for (i in 1:4)
-  plot(glm.subset, which=i)
+  plot(glm.stepwise, which=i)
 
 ## Goodness of fit test (between the fitted model and saturated model)
 ### Residual Deviance
-p.value = pchisq(glm.subset$deviance, glm.subset$df.residual, lower.tail=FALSE)
+p.value = pchisq(glm.stepwise$deviance, glm.stepwise$df.residual, lower.tail=FALSE)
 print(paste("Goodness of fit test (Residual Deviance): p-value =", p.value)) # Large p-value indicates good fit.
 
 ### Pearson test
-p.value <- pchisq(sum(residuals(glm.subset, type="pearson")^2 ),
-                  glm.subset$df.residual, lower.tail=FALSE)
+p.value <- pchisq(sum(residuals(glm.stepwise, type="pearson")^2 ),
+                  glm.stepwise$df.residual, lower.tail=FALSE)
 print(paste("Goodness of fit test (Pearson): p-value =", p.value)) # Large p-value indicates good fit.
 
 ## Likelihood ratio test (between the fitted model and null model)
-p.value = pchisq(glm.subset$null.deviance-glm.subset$deviance,
-                 glm.subset$df.null-glm.subset$df.residual, lower.tail=FALSE)
+p.value = pchisq(glm.stepwise$null.deviance-glm.stepwise$deviance,
+                 glm.stepwise$df.null-glm.stepwise$df.residual, lower.tail=FALSE)
 print(paste("Likelihood ratio test: p-value =", p.value)) # Small p-value indicates not all betas are zero.
 
-# glm.subset = glm(hur.count ~ tna + poly(nina3, degree=2, raw=TRUE), data=df, family=poisson)
+# glm.stepwise = glm(hur.count ~ tna + poly(nina3, degree=2, raw=TRUE), data=df, family=poisson)
 
 ## Residual plots
 par(mfrow=c(2, 2))
-plot(resid(glm.subset, type="response") ~ predict(glm.subset, type="response"),
+plot(resid(glm.stepwise, type="response") ~ predict(glm.stepwise, type="response"),
      xlab=expression(hat(lambda)), ylab="Response residuals")
 abline(h=0)
-plot(resid(glm.subset, type="response") ~ predict(glm.subset, type="link"),
+plot(resid(glm.stepwise, type="response") ~ predict(glm.stepwise, type="link"),
      xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Response residuals")
 abline(h=0)
-plot(resid(glm.subset, type="deviance") ~ predict(glm.subset, type="link"),
+plot(resid(glm.stepwise, type="deviance") ~ predict(glm.stepwise, type="link"),
      xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Deviance residuals")
 abline(h=0)
-plot(resid(glm.subset, type="pearson") ~ predict(glm.subset, type="link"),
+plot(resid(glm.stepwise, type="pearson") ~ predict(glm.stepwise, type="link"),
      xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Pearson residuals")
 abline(h=0)
 
 ## Smooth Scatter Plots
 scatter.smooth(df$tna, df$hur.count)
 scatter.smooth(df$nina3, df$hur.count)
-lambda = predict(glm.subset, type="response")
-z = predict(glm.subset) + (df$hur.count-lambda)/lambda
+lambda = predict(glm.stepwise, type="response")
+z = predict(glm.stepwise) + (df$hur.count-lambda)/lambda
 scatter.smooth(df$tna, z, ylab="Linearized response")
 scatter.smooth(df$nina3, z, ylab="Linearized response")
-# scatter.smooth(predict(glm.subset), z, ylab="Linearized response")
+# scatter.smooth(predict(glm.stepwise), z, ylab="Linearized response")
 
 ## Autocorrelation in deviance residuals
 par(mfrow=c(1, 1))
-acf(resid(glm.subset, type="deviance"))
+acf(resid(glm.stepwise, type="deviance"))
 
 ## Poisson regression with lasso variable selection
 library("glmnet")
