@@ -74,12 +74,15 @@ abline(h=0)
 plot(resid(glm.subset, type="response") ~ predict(glm.subset, type="link"),
      xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Response residuals")
 abline(h=0)
-plot(resid(glm.subset) ~ predict(glm.subset, type="link"),
+plot(resid(glm.subset, type="deviance") ~ predict(glm.subset, type="link"),
      xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Deviance residuals")
 abline(h=0)
 plot(resid(glm.subset, type="pearson") ~ predict(glm.subset, type="link"),
      xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Pearson residuals")
 abline(h=0)
+
+## Autocorrelation in deviance residuals
+acf(resid(glm.subset, type="deviance"))
 
 ## Smooth Scatter Plots
 scatter.smooth(df$tna, df$hur.count)
@@ -90,11 +93,20 @@ scatter.smooth(df$tna, z, ylab="Linearized response")
 scatter.smooth(df$nina3, z, ylab="Linearized response")
 # scatter.smooth(predict(glm.subset), z, ylab="Linearized response")
 
-## Poisson regression with lasso variable selection
+# ## Poisson regression with lasso variable selection
 # library("glmnet")
 # x = model.matrix(hur.count ~ ., data=df)[, -1]
 # y = df$hur.count
-# cv.out = cv.glmnet(x, y, family="poisson", nfolds=5)
-# bestlam = cv.out$lambda.min
-# fit.lasso = glmnet(x, y, family="poisson", alpha=1, lambda=bestlam)
-# glm.lasso = glm(y ~ x[, as.vector(fit.lasso$beta!=0)], family=poisson)
+# grid <- 10^seq(10, -2, length=100)
+# fit.lasso = glmnet(x, y, family="poisson", alpha=1, lambda=grid)
+# bestlam = cv.glmnet(x, y, family="poisson", nfolds=5)$lambda.min
+# beta = as.vector(predict(fit.lasso, type="coefficients", s=bestlam))
+# # glm.lasso = glm(y ~ x[, beta!=0], family=poisson)
+#
+# ## Variable selection via best subset glm from the selected variables via lasso.
+# library(bestglm)
+# glm.best = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson)
+# glm.best = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson, IC="AIC")
+# glm.best = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson,
+#                    IC="CV", CVArgs=list(Method="HTF", K=5, REP=1))
+
