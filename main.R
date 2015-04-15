@@ -81,9 +81,6 @@ plot(resid(glm.subset, type="pearson") ~ predict(glm.subset, type="link"),
      xlab=expression(paste(hat(eta), " = X", hat(beta))), ylab="Pearson residuals")
 abline(h=0)
 
-## Autocorrelation in deviance residuals
-acf(resid(glm.subset, type="deviance"))
-
 ## Smooth Scatter Plots
 scatter.smooth(df$tna, df$hur.count)
 scatter.smooth(df$nina3, df$hur.count)
@@ -92,6 +89,10 @@ z = predict(glm.subset) + (df$hur.count-lambda)/lambda
 scatter.smooth(df$tna, z, ylab="Linearized response")
 scatter.smooth(df$nina3, z, ylab="Linearized response")
 # scatter.smooth(predict(glm.subset), z, ylab="Linearized response")
+
+## Autocorrelation in deviance residuals
+par(mfrow=c(1, 1))
+acf(resid(glm.subset, type="deviance"))
 
 # ## Poisson regression with lasso variable selection
 # library("glmnet")
