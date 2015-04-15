@@ -1,5 +1,5 @@
 library("MASS")
-# rm(list=ls())
+rm(list=ls())
 
 min.year = 1951
 max.year = 2013
@@ -22,9 +22,9 @@ for (f in list.files(path="data", pattern="*.data")) {
 ## Load hurricane count data as the dependent variable
 hurdat = read.csv("data/hurdat.csv", row.names=1)
 hur.count = hurdat[as.character(min.year:max.year), "RevisedHurricanes"]
-par(mfrow=c(1, 1))
-hist(hur.count, breaks=seq(1.5, 15.5), main="Histogram of Hurricane Counts per Year",
-     xlab = "Annual Hurricane Count")
+# par(mfrow=c(1, 1))
+# hist(hur.count, breaks=seq(1.5, 15.5), main="Histogram of Hurricane Counts per Year",
+#      xlab = "Annual Hurricane Count")
 
 ## Check the distribution of the count data
 # library(vcd)
@@ -94,20 +94,22 @@ scatter.smooth(df$nina3, z, ylab="Linearized response")
 par(mfrow=c(1, 1))
 acf(resid(glm.subset, type="deviance"))
 
-# ## Poisson regression with lasso variable selection
-# library("glmnet")
-# x = model.matrix(hur.count ~ ., data=df)[, -1]
-# y = df$hur.count
-# grid <- 10^seq(10, -2, length=100)
-# fit.lasso = glmnet(x, y, family="poisson", alpha=1, lambda=grid)
-# bestlam = cv.glmnet(x, y, family="poisson", nfolds=5)$lambda.min
-# beta = as.vector(predict(fit.lasso, type="coefficients", s=bestlam))
-# # glm.lasso = glm(y ~ x[, beta!=0], family=poisson)
-#
-# ## Variable selection via best subset glm from the selected variables via lasso.
-# library(bestglm)
-# glm.best = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson)
-# glm.best = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson, IC="AIC")
-# glm.best = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson,
-#                    IC="CV", CVArgs=list(Method="HTF", K=5, REP=1))
+## Poisson regression with lasso variable selection
+library("glmnet")
+x = model.matrix(hur.count ~ ., data=df)[, -1]
+y = df$hur.count
+grid <- 10^seq(10, -2, length=100)
+fit.lasso = glmnet(x, y, family="poisson", alpha=1, lambda=grid)
+set.seed(123)
+bestlam = cv.glmnet(x, y, family="poisson", nfolds=5)$lambda.min
+beta = as.vector(predict(fit.lasso, type="coefficients", s=bestlam))[-1]
+glm.lasso = glm(y ~ x[, beta!=0], family=poisson)
+
+## Variable selection via best subset glm from the selected variables via lasso.
+library(bestglm)
+glm.best.bic = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson)
+glm.best.aic = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson, IC="AIC")
+set.seed(123)
+glm.best.cv = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson,
+                      IC="CV", CVArgs=list(Method="HTF", K=5, REP=1))
 
