@@ -33,7 +33,13 @@ hur.count = hurdat[as.character(min.year:max.year), "RevisedHurricanes"]
 # rootogram(fit)
 # distplot(hur.count, type="poisson")
 
-## Poisson regression and stepwise variable selection
+## Poisson regression with best subset stepwise variable selection
+par(mfrow=c(1,1))
+pdf("results/histogram_counts.pdf")
+hist(hur.count, breaks=10, main="Histogram of Hurricane Counts per Year", xlab = "Hurricanes")
+dev.off()
+
+## Poisson regression with best subset stepwise selection
 df = cbind(hur.count, clim.jun2nov)
 glm.full = glm(hur.count ~ ., data=df, family=poisson)
 summary(glm.full)
@@ -48,6 +54,13 @@ summary(glm(formula(glm.stepwise), data=df, family=quasipoisson))
 par(mfrow=c(2,2))
 for (i in 1:4)
   plot(glm.stepwise, which=i)
+
+## Check for outliers on the full model
+pdf("results/assumptions.pdf")
+par(mfrow=c(2,2))
+for (i in 1:4)
+  plot(glm.full, which=i)
+dev.off()
 
 ## Goodness of fit test (between the fitted model and saturated model)
 ### Residual Deviance
@@ -68,7 +81,8 @@ print(paste("Likelihood ratio test: p-value =", p.value)) # Small p-value indica
 
 ## Residual plots
 par(mfrow=c(2, 2))
-plot(resid(glm.stepwise, type="response") ~ predict(glm.stepwise, type="response"),
+pdf("results/residuals.pdf")
+plot(resid(glm.subset, type="response") ~ predict(glm.subset, type="response"),
      xlab=expression(hat(lambda)), ylab="Response residuals")
 abline(h=0)
 plot(resid(glm.stepwise, type="response") ~ predict(glm.stepwise, type="link"),
@@ -112,4 +126,41 @@ glm.best.aic = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poiss
 set.seed(123)
 glm.best.cv = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson,
                       IC="CV", CVArgs=list(Method="HTF", K=5, REP=1))
+acf(resid(glm.subset, type="deviance"))
 
+# ## Poisson regression with lasso variable selection
+# library("glmnet")
+dev.off()
+
+## Smooth Scatter Plots
+par(mfrow=c(1,2))
+pdf("results/smooth_scatter.pdf")
+scatter.smooth(df$tna.data, df$hur.count)
+scatter.smooth(df$nina3.data, df$hur.count)
+dev.off()
+
+
+## Poisson regression with lasso variable selection
+x <- model.matrix(hur.count ~ ., data=df)[, -1]
+y <- df$hur.count
+grid <- 10^seq(10, -2, length=100)
+fit.lasso <- glmnet(x, y, family="poisson", alpha=1, lambda=grid)
+bestlam <- cv.glmnet(x, y, family="poisson", nfolds=5)$lambda.min
+beta <- as.vector(predict(fit.lasso, type="coefficients", s=bestlam))
+
+## Variable selection via best subset glm from the selected variables via lasso.
+library(bestglm)
+glm.best = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson)
+#glm.best = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson, IC="AIC")
+#glm.best = bestglm(cbind(clim.jun2nov[, beta!=0], y=hur.count), family=poisson,
+#                  IC="CV", CVArgs=list(Method="HTF", K=5, REP=1))
+
+glm.best
+paste("BIC for lasso exhaustive selection=", BIC(glm.best$BestModel))
+paste("BIC for stepwise selection=", BIC(glm.stepwise))
+
+pdf("results/lassomodelassumptions.pdf")
+par(mfrow=c(2,2))
+for (i in 1:4)
+  plot(glm.best, which=i)
+dev.off()
